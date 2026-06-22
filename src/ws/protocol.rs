@@ -172,21 +172,24 @@ pub enum BinaryPayload {
 
 /// Convert f32 samples to i16 PCM bytes for binary frame transmission.
 ///
-/// Applies automatic gain control (AGC) to normalize volume:
-/// - Computes RMS energy, then applies gain to reach a target RMS of 0.3.
-/// - Very quiet audio (RMS < 0.001) is boosted proportionally.
-/// - Already loud audio is left mostly unchanged (gain approaches 1).
-/// - Still silence (RMS == 0) stays silent.
+/// Applies peak-based automatic gain control (AGC) to normalize volume:
+/// - Finds the peak absolute sample value, then amplifies so the peak
+///   reaches a target of 0.95 (near full scale, -0.45 dBFS).
+/// - Pure silence (peak == 0) is left unchanged.
+/// - Gain is capped at 100× to avoid extreme noise amplification.
+/// - Already healthy audio (peak > 0.1) is left mostly unchanged.
 pub fn f32_to_i16_pcm(samples: &[f32]) -> Vec<u8> {
-    // Compute RMS (root mean square) energy
-    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+    // Find peak absolute value
+    let peak = samples
+        .iter()
+        .map(|s| s.abs())
+        .fold(0.0f32, f32::max);
 
-    // Compute gain to reach target RMS = 0.3 (healthy conversational level)
-    // Protect against division by zero and avoid boosting pure silence
-    let gain = if rms > 0.001 {
-        (0.3 / rms).min(10.0) // cap at 10x to avoid extreme noise amplification
+    // Compute gain to bring peak to 0.95 (near full scale)
+    let gain = if peak > 0.000_001 {
+        (0.95 / peak).min(100.0)
     } else {
-        1.0 // leave silence / near-silence unchanged
+        1.0
     };
 
     let mut bytes = Vec::with_capacity(samples.len() * 2);
