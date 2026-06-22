@@ -3,16 +3,29 @@
 # install.sh — One-click deployment script for voice-server on RK3568
 #
 # Usage: Run from the project root:
-#   sudo bash deploy/install.sh [--start]
+#   sudo bash deploy/install.sh [--start] [--download-models]
 #
 # Options:
-#   --start    Also start the service after installation
+#   --start             Also start the service after installation
+#   --download-models   Auto-download recommended models to /opt/voice-server/models/
+#   --all               Do everything (install + download models + start)
 #
 # Searches for the binary in this order:
 #   1. ./target/release/voice-server  (cargo build --release output)
 #   2. ./voice-server                 (copied to project root)
 #
 set -euo pipefail
+
+# ── Parse flags ───────────────────────────────────────────
+FLAG_START=false
+FLAG_DOWNLOAD=false
+for arg in "$@"; do
+    case "${arg}" in
+        --start) FLAG_START=true ;;
+        --download-models) FLAG_DOWNLOAD=true ;;
+        --all) FLAG_START=true; FLAG_DOWNLOAD=true ;;
+    esac
+done
 
 # ── Resolve paths ─────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -82,20 +95,40 @@ else
     echo "⚠ Service file '${SERVICE_NAME}' not found in ${SCRIPT_DIR}/"
 fi
 
-# ── Model setup reminder ──────────────────────────────────
-echo ""
-echo "=== Model Setup ==="
-echo "Place your model files in:"
-echo "  ASR: ${MODEL_DIR}/asr/"
-echo "  TTS: ${MODEL_DIR}/tts/"
-echo "  VAD: ${MODEL_DIR}/vad/"
-echo ""
-echo "Then update ${INSTALL_DIR}/${CONFIG_NAME} with correct paths."
-echo "Or use the download helper:"
-echo "  node scripts/download-models.mjs --all"
-echo ""
+# ── Download models ───────────────────────────────────────
+if [ "${FLAG_DOWNLOAD}" = true ]; then
+    DOWNLOAD_SCRIPT="${PROJECT_ROOT}/scripts/download-models.mjs"
+    if [ -f "${DOWNLOAD_SCRIPT}" ]; then
+        echo ""
+        echo "=== Downloading models ==="
+        MODEL_DIR="${MODEL_DIR}" node "${DOWNLOAD_SCRIPT}" --all
+        echo ""
+
+        # Update config.toml paths to match downloaded models
+        echo "=== Updating config paths ==="
+        if grep -q 'zipformer-en' <(ls "${MODEL_DIR}/asr/" 2>/dev/null); then
+            sed -i 's|encoder = ".*"|encoder = "/opt/voice-server/models/asr/encoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            sed -i 's|decoder = ".*"|decoder = "/opt/voice-server/models/asr/decoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            sed -i 's|joiner = ".*"|joiner = "/opt/voice-server/models/asr/joiner.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            sed -i 's|tokens = ".*"|tokens = "/opt/voice-server/models/asr/tokens.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            echo "✓ ASR config paths updated"
+        fi
+        if [ -f "${MODEL_DIR}/vad/silero_vad.onnx" ]; then
+            sed -i 's|model = ".*"|model = "/opt/voice-server/models/vad/silero_vad.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            echo "✓ VAD config path updated"
+        fi
+        if [ -f "${MODEL_DIR}/tts/model.onnx" ]; then
+            sed -i 's|model = ".*"|model = "/opt/voice-server/models/tts/model.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            echo "✓ TTS config path updated"
+        fi
+    else
+        echo "⚠ Download script not found: ${DOWNLOAD_SCRIPT}"
+        echo "  Models must be downloaded manually."
+    fi
+fi
 
 # ── Ready ─────────────────────────────────────────────────
+echo ""
 echo "=== Ready ==="
 echo "Start the service with:"
 echo "  sudo systemctl start voice-server"
@@ -108,8 +141,13 @@ echo "  sudo journalctl -u voice-server -f"
 echo ""
 
 # Optionally start
-if [[ "${*}" == *"--start"* ]]; then
+if [ "${FLAG_START}" = true ]; then
     echo "Starting voice-server service..."
-    systemctl start voice-server || echo "⚠ Service may not start if model files are missing."
-    systemctl status voice-server --no-pager | head -10
+    if systemctl start voice-server 2>/dev/null; then
+        echo "✓ Service started successfully."
+        systemctl status voice-server --no-pager | head -10
+    else
+        echo "⚠ Service failed to start (likely missing model files)."
+        echo "  Check logs: sudo journalctl -u voice-server -n 20"
+    fi
 fi

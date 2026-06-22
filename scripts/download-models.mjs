@@ -78,7 +78,10 @@ import { get } from 'https';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const MODEL_DIR = process.env.MODEL_DIR || join(ROOT, 'models');
+
+function getModelDir() {
+  return process.env.MODEL_DIR || join(ROOT, 'models');
+}
 
 function download(url, dest) {
   return new Promise((resolve, reject) => {
@@ -125,6 +128,12 @@ async function main() {
   const isList = args.includes('--list');
   const downloadAll = args.includes('--all') || args.length === 0;
 
+  // Accept --dir <path> to set download directory (overrides MODEL_DIR env)
+  const dirIdx = args.indexOf('--dir');
+  if (dirIdx !== -1 && dirIdx + 1 < args.length) {
+    process.env.MODEL_DIR = args[dirIdx + 1];
+  }
+
   if (isList) {
     console.log('\nAvailable models:\n');
     for (const [category, models] of Object.entries(MODELS)) {
@@ -157,7 +166,7 @@ async function main() {
   if (selections.includes('tts')) toDownload.tts = 'vits-en';
   if (selections.includes('vad')) toDownload.vad = 'silero-vad';
 
-  console.log(`\nDownload directory: ${MODEL_DIR}`);
+  console.log(`\nDownload directory: ${getModelDir()}`);
   console.log('Models to download:');
   for (const [cat, key] of Object.entries(toDownload)) {
     console.log(`  ${cat}: ${key} — ${MODELS[cat][key].description}`);
@@ -166,7 +175,7 @@ async function main() {
 
   for (const [cat, key] of Object.entries(toDownload)) {
     const model = MODELS[cat][key];
-    const destDir = join(MODEL_DIR, cat);
+    const destDir = join(getModelDir(), cat);
     if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
 
     console.log(`\n📥 Downloading ${cat}/${key}...`);
@@ -200,7 +209,7 @@ async function main() {
 
   for (const [cat, key] of Object.entries(toDownload)) {
     const model = MODELS[cat][key];
-    const destDir = join(MODEL_DIR, cat);
+    const destDir = join(getModelDir(), cat);
     manifest.models[cat] = {
       name: key,
       description: model.description,
@@ -216,7 +225,7 @@ async function main() {
     }
   }
 
-  const manifestPath = join(MODEL_DIR, 'manifest.json');
+  const manifestPath = join(getModelDir(), 'manifest.json');
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   console.log(`  📋 Manifest: ${manifestPath}`);
 }
