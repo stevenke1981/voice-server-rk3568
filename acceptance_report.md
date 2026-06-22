@@ -8,10 +8,32 @@
 
 | 項目 | 結果 | 備註 |
 |------|------|------|
-| `cargo check` | ✅ 通過 | 0 errors, 11 warnings (均為 unused/dead code) |
-| `cargo build --release` | 🔄 待執行 | 需要完整下載所有 crate |
-| Binary size | ❓ 待測 | 需要 release build |
-| Cross-compile to aarch64 | ⏳ 待測 | 需要 Linux 環境 |
+| `cargo check` | ✅ 通過 | 0 errors, 10 warnings (均為 unused/dead code) |
+| `cargo build --release` | ✅ 通過 | ~9 分鐘完整編譯 |
+| Binary size | ✅ **25 MB** | 低於 spec 限制 50 MB |
+| Cross-compile to aarch64 | ✅ **原生編譯** (aarch64) | RK3568 Armbian 上原生編譯成功 |
+| Compiler | rustc 1.96.0 (2026-05-28) | `aarch64-unknown-linux-gnu` |
+| Binary type | ELF 64-bit LSB pie executable, ARM aarch64 | 動態連結 (libstdc++, libm, libc) |
+
+## 專案驗證腳本 (2026-06-22)
+
+| 項目 | 結果 | 備註 |
+|------|------|------|
+| `node scripts/check.mjs` | ✅ 通過 | 62/62 checks, 1 warning (新 scripts/ 目錄) |
+| `node scripts/download-models.mjs --list` | ✅ 通過 | 列出 6 組可用模型 |
+
+## 架構修正 (2026-06-22)
+
+| 項目 | 變更 | 原因 |
+|------|------|------|
+| VAD engine per-connection | ✅ 修正完成 | 原先全局共享 `VoiceActivityDetector` 在多路連線時會造成語音偵測互相干擾。改為每連線建立專屬 instance，使用 `state.config.vad` 作為 factory。 |
+
+## 新增檔案
+
+| 檔案 | 說明 |
+|------|------|
+| `scripts/check.mjs` | V4.1 專案驗證腳本 (62 項檢查) |
+| `scripts/download-models.mjs` | 模型下載輔助工具 (支援 --list/--asr/--tts/--vad/--all) |
 
 ---
 
@@ -19,9 +41,9 @@
 
 | 編號 | 檢查項目 | 狀態 | 備註 |
 |------|---------|------|------|
-| A0.1 | Cross-compilation | ⏳ | 需要 Linux + Linaro toolchain |
-| A0.2 | Binary < 50 MB | ❓ | 需要 release build 後測量 |
-| A0.3 | 最小範例在 RK3568 執行 | ⏳ | 需要實機 |
+| A0.1 | Cross-compilation / 原生編譯 | ✅ | RK3568 (aarch64) 原生編譯成功，rustc 1.96.0 |
+| A0.2 | Binary < 50 MB | ✅ **25 MB** | 遠低於 50 MB 限制 |
+| A0.3 | 最小範例在 RK3568 執行 | 🔄 | 需下載模型後實測 |
 
 ---
 

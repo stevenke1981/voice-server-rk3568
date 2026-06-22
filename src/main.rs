@@ -16,7 +16,6 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use crate::asr::engine::AsrEngine;
-use crate::asr::vad::VadEngine;
 use crate::config::Config;
 use crate::error::VoiceServerError;
 use crate::tts::engine::TtsEngine;
@@ -47,18 +46,15 @@ async fn main() -> Result<(), VoiceServerError> {
         VoiceServerError::Config(format!("Failed to initialize TTS engine: {}", e))
     })?;
 
-    let vad_engine = VadEngine::new(&config.vad).map_err(|e| {
-        VoiceServerError::Config(format!("Failed to initialize VAD engine: {}", e))
-    })?;
-
-    info!("All engines initialized successfully");
+    info!("All engines initialized successfully (VAD will be per-connection)");
 
     // Build shared state
+    // Note: VAD engine is NOT shared — each connection creates its own instance.
+    // This avoids VoiceActivityDetector state corruption across concurrent clients.
     let state = Arc::new(AppState {
         config: config.clone(),
         asr_engine: Arc::new(Mutex::new(asr_engine)),
         tts_engine: Arc::new(Mutex::new(tts_engine)),
-        vad_engine: Arc::new(Mutex::new(vad_engine)),
         active_connections: Arc::new(AtomicUsize::new(0)),
         max_connections: config.server.max_connections,
     });

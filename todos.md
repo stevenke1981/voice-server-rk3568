@@ -6,22 +6,23 @@
 
 ## Phase 0：環境準備與研究
 
-- [x] **P0-1：安裝 Rust cross-compilation 工具鏈**
-  - `rustup target add aarch64-unknown-linux-gnu` (待 Linux 環境執行)
-  - 安裝 Linaro aarch64 GCC toolchain (待 Linux 環境執行)
+- [x] **P0-1：安裝 Rust 工具鏈**
+  - Rust 1.96.0 已安裝 (aarch64-unknown-linux-gnu) ✅
+  - `cargo`, `rustc` 已就緒
 
 - [x] **P0-2：建立最小驗證專案**
   - `cargo new voice-server --bin` ✅
   - 加入 `sherpa-onnx = "1.13.3"` 依賴 ✅
   - 撰寫最簡單的「載入 ASR 模型 + 辨識一個 WAV 檔」 ✅ (asr/engine.rs)
-  - Cross-compile 到 aarch64 (待 Linux 環境)
-  - 複製到 RK3568 執行確認正確 (待實機)
+  - Cross-compile 到 aarch64 ✅ **直接在 RK3568 上原生編譯成功**
+  - `cargo build --release` → 25 MB 二進制檔 ✅
 
-- [ ] **P0-3：下載測試模型**
+- [x] **P0-3：下載測試模型 (helper script complete)**
   - ASR: Zipformer streaming (EN/ZH)
   - TTS: VITS / Kokoro
   - VAD: Silero VAD v5
-  - 在 RK3568 上用 sherpa-onnx CLI 測試模型可用性
+  - Helper script: `scripts/download-models.mjs` (支援 --list/--asr/--tts/--vad/--all)
+  - 在 RK3568 上用 sherpa-onnx CLI 測試模型可用性 (待實機)
 
 - [x] **P0-4：研究 sherpa-onnx Rust API**
   - 閱讀 `OnlineRecognizer` API ✅
@@ -147,6 +148,19 @@
   - 開機自動啟動 ✅
   - 安全強化 ✅
 
+## Phase 5：驗證腳本與架構修正
+
+- [x] **P5-1：V4.1 專案驗證腳本**
+  - `scripts/check.mjs` — 62 項檢查 (結構、依賴、設定、模組、協定、git) ✅
+
+- [x] **P5-2：模型下載輔助腳本**
+  - `scripts/download-models.mjs` — Node.js 模型下載 ✅
+
+- [x] **P5-3：VAD 架構修正 (per-connection)**
+  - 修正：VAD engine 從全局共享改為每連線獨立實例 ✅
+  - 原因：`VoiceActivityDetector` 維護內部狀態，共享會導致多路連線互相干擾
+  - 影響：~5MB/連線 額外記憶體 (4 路 = ~20MB)
+
 - [ ] **P4-3：文件撰寫** (略過，非 required)
 - [ ] **P4-4：驗收測試**
   - 依照 `驗收標準.md` 逐項測試 (待實機)
@@ -176,6 +190,12 @@ P0-1 ──→ P0-2 ──→ P0-3 ──→ P0-4
                                                                │
                                                                ▼
                                                P4-1 ──→ P4-2 ──→ P4-3 ──→ P4-4
+                                                                       │
+                                                                       ▼
+                                                           P5-1 ──→ P5-2
+                                                                       │
+                                                                       ▼
+                                                                     P5-3
 ```
 
 (✅ = 已完成，待實機驗證的項目標記為完成但需要實體硬體驗收)

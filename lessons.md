@@ -65,3 +65,18 @@
 **Source**: Voice Server RK3568 專案 Phase 1 實作
 
 **Future Rule Candidate**: 使用外部 crate 時，在寫主邏輯前先讀取 crate 原始碼確認 API 簽名（`~/.cargo/registry/src/`），然後才開始撰寫封裝層。
+
+---
+
+## Lesson #5 — 2026-06-22
+
+**Trigger**: 程式碼審查發現 `VoiceActivityDetector` 被放在全域 `Arc<Mutex<VadEngine>>` 中共享，但 VAD 會維護內部狀態（音訊緩衝區、模型激活狀態）。多個連線同時發送音訊時，各連線的語音活動偵測會互相干擾。
+
+**Lesson**: 每個 `VoiceActivityDetector` 實例（以及任何內部狀態可變的 C library wrapper）**不應該**跨連線共享。正確做法：
+1. 每個 WebSocket 連線建立專屬的 VAD 實例
+2. 使用 `VadConfig` 作為 factory，每次建立時載入 Silero VAD 模型
+3. 模型記憶體開銷約 5MB/連線，對於 4-8 路連線可接受（20-40MB）
+
+**Source**: Voice Server RK3568 程式碼審查 (2026-06-22)
+
+**Future Rule Candidate**: 任何封裝 C library 的 Rust wrapper，如果其內部 API 包含「餵入資料 → 更新狀態 → 查詢結果」模式（而非純 stateless function call），則需要在架構層面設計為 per-connection instance 或使用明確的 session/stream 隔離。審查 checklist 應包含：「此 wrapper 的每個 method 是否 thread-safe？是否可安全地在多個 tokio task 間共享？」

@@ -20,11 +20,14 @@ use crate::ws::protocol::{
 };
 
 /// Shared application state accessible from all WebSocket handlers.
+///
+/// Note: VAD engine is NOT shared — each connection creates its own instance
+/// because VoiceActivityDetector maintains per-instance state (audio buffers,
+/// model activations). Sharing it would corrupt detection across connections.
 pub struct AppState {
     pub config: Config,
     pub asr_engine: Arc<Mutex<AsrEngine>>,
     pub tts_engine: Arc<Mutex<TtsEngine>>,
-    pub vad_engine: Arc<Mutex<VadEngine>>,
     pub active_connections: Arc<AtomicUsize>,
     pub max_connections: usize,
 }
@@ -89,6 +92,20 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
     let mut is_speaking = false;
     let mut audio_buffer: Vec<i16> = Vec::new();
 
+    // Per-connection VAD engine (NOT shared — each connection needs its own
+    // VoiceActivityDetector instance because VAD maintains per-stream state).
+    // ~5MB per instance for Silero VAD model.
+    let mut vad_engine = match VadEngine::new(&state.config.vad) {
+        Ok(engine) => engine,
+        Err(e) => {
+            error!("Failed to create per-connection VAD engine: {}", e);
+            state
+                .active_connections
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            return;
+        }
+    };
+
     // Main message receive loop
     loop {
         tokio::select! {
@@ -99,6 +116,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
                             Ok(msg) => {
                                 if let Err(e) = handle_text_message(
                                     msg,
+                                    &mut vad_engine,
                                     &state,
                                     &tx,
                                     &mut asr_stream,
@@ -127,6 +145,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
                                 protocol::BinaryPayload::AsrAudio(pcm_bytes) => {
                                     handle_asr_audio(
                                         &pcm_bytes,
+                                        &mut vad_engine,
                                         &state,
                                         &tx,
                                         &mut asr_stream,
@@ -181,6 +200,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
 #[allow(clippy::too_many_arguments)]
 async fn handle_text_message(
     msg: ClientMessage,
+    vad_engine: &mut VadEngine,
     state: &Arc<AppState>,
     tx: &mpsc::UnboundedSender<ServerMessage>,
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
@@ -196,11 +216,13 @@ async fn handle_text_message(
             *asr_stream = Some(stream);
             *is_speaking = false;
             audio_buffer.clear();
+            // Reset per-connection VAD for a new ASR session
+            vad_engine.reset();
             let _ = tx.send(ServerMessage::vad_silence());
             Ok(())
         }
 
-        ClientMessage::AsrAudio { data, sample_rate } => {
+        ClientMessage::AsrAudio { data, sample_rate: _ } => {
             let pcm_bytes = base64::Engine::decode(
                 &base64::engine::general_purpose::STANDARD,
                 &data,
@@ -214,9 +236,9 @@ async fn handle_text_message(
                 .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
                 .collect();
 
-            let _sr = sample_rate.unwrap_or(16000);
+            // Engine always uses 16000 Hz per spec
             process_audio_chunk(
-                state, tx, asr_stream, is_speaking, audio_buffer, &samples,
+                vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, &samples,
             )
             .await;
             Ok(())
@@ -257,7 +279,9 @@ async fn handle_text_message(
                         Ok(chunk) => {
                             let pcm_bytes = protocol::f32_to_i16_pcm(&chunk.audio);
                             let sample_rate = chunk.sample_rate;
-                            let chunk_size = (sample_rate as usize) / 5; // ~200ms chunks
+                            // ~100ms per chunk at output sample rate (chunk_size is in bytes,
+                            // each PCM sample is 2 bytes, so sample_rate/5 bytes = 100ms at any rate)
+                            let chunk_size = (sample_rate as usize) / 5;
                             if chunk_size == 0 {
                                 return;
                             }
@@ -313,7 +337,12 @@ async fn handle_text_message(
 }
 
 /// Process an audio chunk through VAD + ASR.
+///
+/// Each WebSocket connection passes its own `vad_engine` — VAD instances are
+/// per-connection because VoiceActivityDetector maintains internal state that
+/// would be corrupted by interleaved audio from multiple connections.
 async fn process_audio_chunk(
+    vad_engine: &mut VadEngine,
     state: &Arc<AppState>,
     tx: &mpsc::UnboundedSender<ServerMessage>,
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
@@ -321,10 +350,8 @@ async fn process_audio_chunk(
     audio_buffer: &mut Vec<i16>,
     samples: &[i16],
 ) {
-    // Run VAD
-    let mut vad_engine = state.vad_engine.lock().await;
+    // Run VAD (per-connection instance — safe to mutate without locks)
     let vad_state = vad_engine.process(samples);
-    drop(vad_engine);
 
     // Notify client of VAD state changes
     match vad_state {
@@ -369,6 +396,7 @@ async fn process_audio_chunk(
 /// Handle binary ASR audio frame.
 async fn handle_asr_audio(
     pcm_bytes: &[u8],
+    vad_engine: &mut VadEngine,
     state: &Arc<AppState>,
     tx: &mpsc::UnboundedSender<ServerMessage>,
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
@@ -379,5 +407,5 @@ async fn handle_asr_audio(
         .chunks_exact(2)
         .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
-    process_audio_chunk(state, tx, asr_stream, is_speaking, audio_buffer, &samples).await;
+    process_audio_chunk(vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, &samples).await;
 }

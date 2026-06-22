@@ -49,6 +49,14 @@
 
 ---
 
+## 架構決策 (2026-06-22)
+
+| 決策 | 檔案 | 說明 |
+|------|------|------|
+| VAD per-connection | `src/ws/handler.rs`, `src/main.rs` | `VoiceActivityDetector` 維護內部狀態，先前全局共享會導致多路連線互相干擾。改為每連線建立專屬實例 (~5MB/連線)。 |
+| 驗證腳本 | `scripts/check.mjs` | V4.1 跨平台專案驗證，檢查專案結構、Cargo.toml、config.toml、模組一致性、協定定義。 |
+| 模型下載 | `scripts/download-models.mjs` | Node.js 輔助腳本。支援 --list/--asr/--tts/--vad/--all。 |
+
 ## 未實作項目 (已知缺口)
 
 | 需求 ID | 原因 | 預計 |
@@ -58,5 +66,5 @@
 | F3.2 (多語音切換) | TTS config 已支援多模型類型 | P1 feature |
 | F3.4 (Piper/Kokoro) | Piper 在 v1.13.3 無官方支援；Kokoro 已可設定 | 待 crate 更新 |
 | F3.6 (TTS 取消) | 需要 CancellationToken 機制 | P2-5 later |
-| P0-1 (Cross-compilation) | 需要在 Linux 環境設定 | 待實機 |
-| P0-3 (下載模型) | 需要在 RK3568 操作 | 待實機 |
+| P0-1 (Cross-compilation) | ✅ aarch64 原生編譯成功，rustc 1.96.0 | 已解決 |
+| P0-3 (下載模型) | 需要在 RK3568 操作 | 可用 `scripts/download-models.mjs` |

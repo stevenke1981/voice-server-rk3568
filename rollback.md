@@ -16,6 +16,9 @@
 | 日期 | 變更 | 回滾方式 |
 |------|------|---------|
 | 2026-06-22 | 初始專案結構: Cargo.toml, src/*, config.toml | `git clean -fd` 或刪除不想要的檔案 |
+| 2026-06-22 | VAD per-connection: handler.rs, main.rs | `git checkout src/ws/handler.rs src/main.rs` 或 revert commit |
+| 2026-06-22 | JS/TS scripts: scripts/check.mjs, scripts/download-models.mjs | `rm -rf scripts/` 或 `git checkout scripts/` |
+| 2026-06-22 | 文件更新: todos.md, lessons.md, traceability_matrix.md, acceptance_report.md | `git checkout -- *.md` |
 
 ---
 
@@ -44,11 +47,13 @@ git revert HEAD               # 反向 commit
 | src/asr/vad.rs | ws/handler.rs | 低 - 僅 VAD 功能 |
 | src/tts/engine.rs | ws/handler.rs | 低 - 僅 TTS 功能 |
 | src/ws/protocol.rs | ws/handler.rs | 低 - 僅協定 |
-| src/ws/handler.rs | main.rs, 所有引擎 | 中 - 核心邏輯 |
+| src/ws/handler.rs | main.rs, 所有引擎 | 中 - 核心邏輯 (VAD 改為 per-connection) |
 | src/error.rs | 所有模組 | 中 |
-| src/main.rs | 所有模組 | 高 - entry point |
+| src/main.rs | 所有模組 | 高 - entry point (VAD engine 從 AppState 移除) |
 | config.toml | 執行時期 | 低 - 可重新產生 |
 | deploy/* | 部署環境 | 低 |
+| scripts/check.mjs | 無 | 低 - 獨立驗證腳本 |
+| scripts/download-models.mjs | 無 | 低 - 獨立下載腳本 |
 
 ### 3. 依賴性回滾
 
