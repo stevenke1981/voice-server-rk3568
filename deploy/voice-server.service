@@ -1,0 +1,34 @@
+[Unit]
+Description=Voice Server (ASR + TTS + VAD over WebSocket)
+Documentation=https://github.com/voice-server-rk3568
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/voice-server
+ExecStart=/opt/voice-server/voice-server
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Environment
+Environment=VOICE_SERVER_CONFIG=/opt/voice-server/config.toml
+Environment=RUST_LOG=info
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+max_connections = 8
+idle_timeout_secs = 300
+
+[asr]
+model_type = "zipformer"
+encoder = "/opt/voice-server/models/asr/encoder.onnx"
+decoder = "/opt/voice-server/models/asr/decoder.onnx"
+joiner = "/opt/voice-server/models/asr/joiner.onnx"
+tokens = "/opt/voice-server/models/asr/tokens.txt"
+num_threads = 2
+provider = "cpu"
+
+[tts]
+model_type = "vits"
+model = "/opt/voice-server/models/tts/model.onnx"
+tokens = "/opt/voice-server/models/tts/tokens.txt"
+num_threads = 1
+provider = "cpu"
+
+[vad]
+model = "/opt/voice-server/models/vad/silero_vad.onnx"
+threshold = 0.5
+min_speech_duration_ms = 100
+min_silence_duration_ms = 500
+window_size = 512

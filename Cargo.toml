@@ -1,0 +1,45 @@
+[package]
+name = "voice-server"
+version = "0.1.0"
+edition = "2021"
+description = "RK3568 offline voice server with ASR + TTS + VAD over WebSocket"
+
+[profile.release]
+opt-level = "z"    # Optimize for size
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# ASR / TTS / VAD
+sherpa-onnx = "1.13.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Audio
+hound = "3.5"
+
+# Error handling / logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "2"
+
+# Utilities
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+bytes = "1"
+futures-util = "0.3"
+chrono = "0.4"
+
+[build-dependencies]
+# sherpa-onnx build script handles downloading prebuilt C libs
