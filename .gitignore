@@ -21,3 +21,7 @@ models/vad/
 
 # Node.js
 node_modules/
+
+# Test audio files
+*.pcm
+*.wav

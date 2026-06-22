@@ -41,5 +41,9 @@ bytes = "1"
 futures-util = "0.3"
 chrono = "0.4"
 
+# WebSocket client
+tokio-tungstenite = "0.24"
+clap = { version = "4", features = ["derive"] }
+
 [build-dependencies]
 # sherpa-onnx build script handles downloading prebuilt C libs
