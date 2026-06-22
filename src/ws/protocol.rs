@@ -171,10 +171,28 @@ pub enum BinaryPayload {
 }
 
 /// Convert f32 samples to i16 PCM bytes for binary frame transmission.
+///
+/// Applies automatic gain control (AGC) to normalize volume:
+/// - Computes RMS energy, then applies gain to reach a target RMS of 0.3.
+/// - Very quiet audio (RMS < 0.001) is boosted proportionally.
+/// - Already loud audio is left mostly unchanged (gain approaches 1).
+/// - Still silence (RMS == 0) stays silent.
 pub fn f32_to_i16_pcm(samples: &[f32]) -> Vec<u8> {
+    // Compute RMS (root mean square) energy
+    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+
+    // Compute gain to reach target RMS = 0.3 (healthy conversational level)
+    // Protect against division by zero and avoid boosting pure silence
+    let gain = if rms > 0.001 {
+        (0.3 / rms).min(10.0) // cap at 10x to avoid extreme noise amplification
+    } else {
+        1.0 // leave silence / near-silence unchanged
+    };
+
     let mut bytes = Vec::with_capacity(samples.len() * 2);
     for &sample in samples {
-        let clamped = sample.clamp(-1.0, 1.0);
+        let amplified = sample * gain;
+        let clamped = amplified.clamp(-1.0, 1.0);
         let int_val = (clamped * 32767.0) as i16;
         bytes.extend_from_slice(&int_val.to_le_bytes());
     }
