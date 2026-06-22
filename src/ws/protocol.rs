@@ -172,12 +172,13 @@ pub enum BinaryPayload {
 
 /// Convert f32 samples to i16 PCM bytes for binary frame transmission.
 ///
-/// Applies peak-based automatic gain control (AGC) to normalize volume:
+/// Applies full-scale peak normalization:
 /// - Finds the peak absolute sample value, then amplifies so the peak
-///   reaches a target of 0.95 (near full scale, -0.45 dBFS).
+///   reaches 0.95 (near full scale, -0.45 dBFS). No upper cap on gain,
+///   because TTS model output can be extremely quiet and needs aggressive
+///   normalization. The clamp to [-1, 1] prevents any overflow.
 /// - Pure silence (peak == 0) is left unchanged.
-/// - Gain is capped at 100× to avoid extreme noise amplification.
-/// - Already healthy audio (peak > 0.1) is left mostly unchanged.
+/// - Already healthy audio (peak > 0.1) is boosted only slightly.
 pub fn f32_to_i16_pcm(samples: &[f32]) -> Vec<u8> {
     // Find peak absolute value
     let peak = samples
@@ -186,8 +187,9 @@ pub fn f32_to_i16_pcm(samples: &[f32]) -> Vec<u8> {
         .fold(0.0f32, f32::max);
 
     // Compute gain to bring peak to 0.95 (near full scale)
+    // No upper cap — the clamp handles overflow for extreme values.
     let gain = if peak > 0.000_001 {
-        (0.95 / peak).min(100.0)
+        0.95 / peak
     } else {
         1.0
     };
