@@ -8,6 +8,8 @@
  *   node scripts/download-models.mjs --all           # download all (default)
  *   node scripts/download-models.mjs --asr --tts     # selective
  *   node scripts/download-models.mjs --all --dir /opt/voice-server/models
+ *   node scripts/download-models.mjs --asr --asr-model zipformer-zh-int8  # select ASR model
+ *   node scripts/download-models.mjs --asr --asr-model sense-voice-int8   # SenseVoice
  *
  * Models are downloaded to ./models/ by default.
  * Set MODEL_DIR env var or use --dir to change destination.
@@ -44,15 +46,14 @@ const MODELS = {
       },
     },
     'zipformer-zh-int8': {
-      description: 'Zipformer ZH int8 streaming (Chinese, newer model, ~40MB)',
+      description: 'Zipformer ZH int8 streaming (Chinese, newer model, ~130MB archive, ~40MB extracted)',
       archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2`,
       extractDir: 'sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30',
-      files: ['encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.int8.onnx', 'joiner-epoch-99-avg-1.int8.onnx', 'tokens.txt'],
+      files: ['encoder.int8.onnx', 'decoder.onnx', 'joiner.int8.onnx', 'tokens.txt'],
       configType: 'transducer',
       fileMap: {
-        'encoder-epoch-99-avg-1.int8.onnx': 'encoder.onnx',
-        'decoder-epoch-99-avg-1.int8.onnx': 'decoder.onnx',
-        'joiner-epoch-99-avg-1.int8.onnx': 'joiner.onnx',
+        'encoder.int8.onnx': 'encoder.onnx',
+        'joiner.int8.onnx': 'joiner.onnx',
       },
     },
     'sense-voice-int8': {
