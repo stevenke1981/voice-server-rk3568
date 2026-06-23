@@ -27,6 +27,9 @@ model = "/opt/voice-server/models/tts/model.onnx"
 tokens = "/opt/voice-server/models/tts/tokens.txt"
 # Lexicon file (required for some VITS models like vits-melo-tts-zh_en)
 lexicon = "/opt/voice-server/models/tts/lexicon.txt"
+# Data directory containing dict/ subfolder and .fst files (Jieba + text normalization)
+# Required for Melo TTS zh-en model. Auto-detected from model path if not set.
+data_dir = "/opt/voice-server/models/tts"
 num_threads = 1
 provider = "cpu"
 

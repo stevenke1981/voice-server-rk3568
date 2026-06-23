@@ -92,6 +92,19 @@ fn build_tts_config(config: &TtsConfig) -> OfflineTtsConfig {
                 tts_config.model.vits.lexicon =
                     Some(lexicon.to_string_lossy().to_string());
             }
+            // data_dir: directory containing dict/ subfolder and .fst files
+            // Required for Melo TTS (Jieba word segmentation + FST text normalization).
+            // Default: use the parent directory of model.onnx
+            let data_dir = config.data_dir.as_deref().or_else(|| {
+                config.model.as_ref().and_then(|m| m.parent())
+            });
+            if let Some(d) = data_dir {
+                let d_str = d.to_string_lossy().to_string();
+                tts_config.model.vits.data_dir = Some(d_str.clone());
+                // dict_dir defaults to {data_dir}/dict
+                let dict_dir = format!("{}/dict", d_str.trim_end_matches(|c| c == '/' || c == '\\'));
+                tts_config.model.vits.dict_dir = Some(dict_dir);
+            }
         }
         "matcha" | "matcha-tts" => {
             if let Some(model) = &config.model {

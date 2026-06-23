@@ -25,3 +25,5 @@ node_modules/
 # Test audio files
 *.pcm
 *.wav
+
+tts_*.txt
