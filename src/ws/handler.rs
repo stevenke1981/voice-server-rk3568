@@ -91,6 +91,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
     let mut asr_stream: Option<sherpa_onnx::OnlineStream> = None;
     let mut is_speaking = false;
     let mut audio_buffer: Vec<i16> = Vec::new();
+    // Tracks how many samples from audio_buffer have already been fed to the ASR
+    // stream. On each process_audio_chunk call, only feed audio_buffer[asr_fed_len..]
+    // to avoid re-feeding the same audio, which corrupts the ASR decoder state.
+    let mut asr_fed_len: usize = 0;
 
     // Per-connection VAD engine (NOT shared — each connection needs its own
     // VoiceActivityDetector instance because VAD maintains per-stream state).
@@ -122,6 +126,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
                                     &mut asr_stream,
                                     &mut is_speaking,
                                     &mut audio_buffer,
+                                    &mut asr_fed_len,
                                     connection_id,
                                 )
                                 .await
@@ -151,6 +156,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
                                         &mut asr_stream,
                                         &mut is_speaking,
                                         &mut audio_buffer,
+                                        &mut asr_fed_len,
                                     )
                                     .await;
                                 }
@@ -198,6 +204,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<AppState>) {
 
 /// Handle a parsed text message from the client.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn handle_text_message(
     msg: ClientMessage,
     vad_engine: &mut VadEngine,
@@ -206,6 +213,7 @@ async fn handle_text_message(
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
     is_speaking: &mut bool,
     audio_buffer: &mut Vec<i16>,
+    asr_fed_len: &mut usize,
     connection_id: uuid::Uuid,
 ) -> Result<(), VoiceServerError> {
     match msg {
@@ -216,6 +224,7 @@ async fn handle_text_message(
             *asr_stream = Some(stream);
             *is_speaking = false;
             audio_buffer.clear();
+            *asr_fed_len = 0;
             // Reset per-connection VAD for a new ASR session
             vad_engine.reset();
             let _ = tx.send(ServerMessage::vad_silence());
@@ -238,7 +247,7 @@ async fn handle_text_message(
 
             // Engine always uses 16000 Hz per spec
             process_audio_chunk(
-                vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, &samples,
+                vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, asr_fed_len, &samples,
             )
             .await;
             Ok(())
@@ -260,6 +269,7 @@ async fn handle_text_message(
             }
             *is_speaking = false;
             audio_buffer.clear();
+            *asr_fed_len = 0;
             Ok(())
         }
 
@@ -348,6 +358,7 @@ async fn process_audio_chunk(
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
     is_speaking: &mut bool,
     audio_buffer: &mut Vec<i16>,
+    asr_fed_len: &mut usize,
     samples: &[i16],
 ) {
     // Run VAD (per-connection instance — safe to mutate without locks)
@@ -363,31 +374,42 @@ async fn process_audio_chunk(
             *is_speaking = false;
             let _ = tx.send(ServerMessage::vad_silence());
 
-            if let Some(ref stream) = *asr_stream {
-                if !audio_buffer.is_empty() {
-                    let engine = state.asr_engine.lock().await;
-                    let result = engine.recognize(stream, audio_buffer);
-                    if let Some(r) = result {
-                        if !r.text.is_empty() {
-                            let _ = tx.send(ServerMessage::final_result(&r.text, 0.92));
-                        }
+            // When VAD transitions to silence, finalize the ASR stream.
+            // Use finalize_result (marks input_finished + decodes remaining)
+            // instead of re-feeding audio_buffer which would corrupt state.
+            if let Some(stream) = asr_stream.take() {
+                let engine = state.asr_engine.lock().await;
+                let result = engine.finalize_result(&stream);
+                if let Some(r) = result {
+                    if !r.text.is_empty() {
+                        let _ = tx.send(ServerMessage::final_result(&r.text, 0.92));
                     }
-                    audio_buffer.clear();
                 }
+                audio_buffer.clear();
+                *asr_fed_len = 0;
             }
         }
         _ => {}
     }
 
-    // Feed audio to ASR stream for interim results
+    // Feed only NEW audio to ASR stream for interim results.
+    // Audio that was already fed in previous calls must NOT be re-fed
+    // because sherpa-onnx OnlineStream::accept_waveform is additive —
+    // re-feeding the same samples corrupts the decoder state.
     if let Some(ref stream) = *asr_stream {
         audio_buffer.extend_from_slice(samples);
-        let engine = state.asr_engine.lock().await;
-        let recent: Vec<i16> = audio_buffer.iter().copied().collect();
-        let result = engine.recognize(stream, &recent);
-        if let Some(r) = result {
-            if !r.text.is_empty() {
-                let _ = tx.send(ServerMessage::interim(&r.text));
+
+        // Determine the new samples not yet fed to ASR
+        if *asr_fed_len < audio_buffer.len() {
+            let new_samples = &audio_buffer[*asr_fed_len..];
+            let engine = state.asr_engine.lock().await;
+            let result = engine.recognize(stream, new_samples);
+            *asr_fed_len = audio_buffer.len();
+
+            if let Some(r) = result {
+                if !r.text.is_empty() {
+                    let _ = tx.send(ServerMessage::interim(&r.text));
+                }
             }
         }
     }
@@ -402,10 +424,11 @@ async fn handle_asr_audio(
     asr_stream: &mut Option<sherpa_onnx::OnlineStream>,
     is_speaking: &mut bool,
     audio_buffer: &mut Vec<i16>,
+    asr_fed_len: &mut usize,
 ) {
     let samples: Vec<i16> = pcm_bytes
         .chunks_exact(2)
         .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
-    process_audio_chunk(vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, &samples).await;
+    process_audio_chunk(vad_engine, state, tx, asr_stream, is_speaking, audio_buffer, asr_fed_len, &samples).await;
 }

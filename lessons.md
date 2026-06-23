@@ -80,3 +80,30 @@
 **Source**: Voice Server RK3568 程式碼審查 (2026-06-22)
 
 **Future Rule Candidate**: 任何封裝 C library 的 Rust wrapper，如果其內部 API 包含「餵入資料 → 更新狀態 → 查詢結果」模式（而非純 stateless function call），則需要在架構層面設計為 per-connection instance 或使用明確的 session/stream 隔離。審查 checklist 應包含：「此 wrapper 的每個 method 是否 thread-safe？是否可安全地在多個 tokio task 間共享？」
+
+---
+
+## Lesson #6 — 2026-06-23 — ASR Streaming: 不要重複餵音訊給 sherpa-onnx OnlineStream
+
+**Trigger**: ASR chunked streaming 測試時發現伺服器永遠不產出 interim/final 結果。診斷後發現 `process_audio_chunk()` 每次呼叫會把 `audio_buffer` 中「所有」累積的音訊重新餵給 `OnlineStream::accept_waveform()`。由於 sherpa-onnx 的 `accept_waveform()` 是累加的，重複餵同一段音訊會讓解碼器收到數倍於實際長度的資料，導致無法正確解碼。
+
+**Lesson**: 任何使用 sherpa-onnx `OnlineStream` 的 streaming 場景，必須追蹤「已餵送的位置（offset）」並只餵送「增量（delta）」音訊。常見錯誤模式：
+1. ❌ 每次呼叫都餵送整個累積緩衝區 → 重複餵送，解碼器混亂
+2. ✅ 只餵送 `audio_buffer[asr_fed_len..]` → 每個 chunk 只被餵一次
+
+**實作方式**：
+```rust
+// 維護追蹤變數
+let mut asr_fed_len: usize = 0;
+
+// 每次只餵新的部分
+if asr_fed_len < audio_buffer.len() {
+    let new_samples = &audio_buffer[asr_fed_len..];
+    engine.recognize(stream, new_samples);
+    asr_fed_len = audio_buffer.len();
+}
+```
+
+**Source**: Voice Server RK3568, `src/ws/handler.rs` — `process_audio_chunk()` fix
+
+**Future Rule Candidate**: 所有串流處理（audio/video/text streaming）中，如果底層 API 採用累加式（push-based）的資料接收模式，必須在實作 layer 使用 delta-tracking（offset 或 pending queue）來確保每個資料單位只被餵送一次。建議 code review checklist 加入：「此 streaming 路徑是否有重複餵送的風險？」
