@@ -83,7 +83,10 @@ const MODELS = {
       description: 'VITS Melo TTS (Chinese + English, ~163MB, 1 speaker)',
       archive: `${TTS_BASE}/vits-melo-tts-zh_en.tar.bz2`,
       extractDir: 'vits-melo-tts-zh_en',
-      files: ['model.onnx', 'tokens.txt', 'lexicon.txt'],
+      files: [
+        'model.onnx', 'tokens.txt', 'lexicon.txt',
+        'dict/', 'new_heteronym.fst', 'date.fst', 'phone.fst', 'number.fst',
+      ],
       configType: 'vits',
     },
     'vits-ljs-en': {
@@ -300,7 +303,11 @@ async function main() {
             } else {
               // Use cp via exec for directories (e.g., espeak-ng-data)
               execSync(`cp -r "${src}" "${dst}"`, { stdio: 'pipe' });
-              const size = existsSync(dst) ? (readFileSync(dst).length / 1024 / 1024).toFixed(1) + 'MB' : '(dir)';
+              let size;
+              if (existsSync(dst)) {
+                try { size = (readFileSync(dst).length / 1024 / 1024).toFixed(1) + 'MB'; }
+                catch { size = '(dir)'; }
+              } else { size = '(dir)'; }
               console.log(`  ✅ ${file} (${size})`);
             }
           } else {
@@ -352,7 +359,8 @@ async function main() {
       for (const f of model.files) {
         const path = join(destDir, f);
         if (existsSync(path)) {
-          files[f] = readFileSync(path).length;
+          try { files[f] = readFileSync(path).length; }
+          catch { files[f] = 0; }
         }
       }
       manifest.models[`${cat}/${key}`] = { files };
