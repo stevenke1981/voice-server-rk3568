@@ -55,6 +55,15 @@ impl AsrEngine {
         self.recognizer.get_result(stream)
     }
 
+    /// Feed PCM samples to the ASR stream WITHOUT decoding.
+    /// Use this in streaming scenarios where you want to accumulate audio
+    /// first and only decode at the end (via finalize_result) to avoid
+    /// fragmenting the decoder state with partial chunks.
+    pub fn feed_audio(&self, stream: &OnlineStream, samples: &[i16]) {
+        let float_samples: Vec<f32> = samples.iter().map(|&s| s as f32 / 32768.0).collect();
+        stream.accept_waveform(self.sample_rate, &float_samples);
+    }
+
     /// Decode the current stream state without new input.
     pub fn decode(&self, stream: &OnlineStream) {
         if self.recognizer.is_ready(stream) {

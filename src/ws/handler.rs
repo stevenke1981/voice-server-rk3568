@@ -374,28 +374,29 @@ async fn process_audio_chunk(
             *is_speaking = false;
             let _ = tx.send(ServerMessage::vad_silence());
 
-            // When VAD transitions to silence, finalize the ASR stream.
-            // Use finalize_result (marks input_finished + decodes remaining)
-            // instead of re-feeding audio_buffer which would corrupt state.
-            if let Some(stream) = asr_stream.take() {
-                let engine = state.asr_engine.lock().await;
-                let result = engine.finalize_result(&stream);
-                if let Some(r) = result {
-                    if !r.text.is_empty() {
-                        let _ = tx.send(ServerMessage::final_result(&r.text, 0.92));
-                    }
-                }
-                audio_buffer.clear();
-                *asr_fed_len = 0;
-            }
+            // Note: We intentionally do NOT decode+get_result here because:
+            // 1. VAD can oscillate rapidly with short chunks, and each decode()
+            //    call advances the decoder state, fragmenting the recognition.
+            // 2. The AsrStop message (sent by the client after all audio) triggers
+            //    finalize_result which calls input_finished + repeated decode
+            //    to produce the complete final result.
+            // 3. If we decoded here, the decoder's internal state would advance
+            //    past incomplete hypotheses, potentially losing accuracy.
+            //
+            // For end-of-utterance detection in interactive apps, a future
+            // enhancement should use a "silence timeout" (e.g. 500ms of
+            // continuous silence) before triggering finalization.
         }
         _ => {}
     }
 
-    // Feed only NEW audio to ASR stream for interim results.
+    // Feed only NEW audio to ASR stream.
     // Audio that was already fed in previous calls must NOT be re-fed
-    // because sherpa-onnx OnlineStream::accept_waveform is additive —
-    // re-feeding the same samples corrupts the decoder state.
+    // because sherpa-onnx OnlineStream::accept_waveform is additive.
+    //
+    // Uses feed_audio (no decode) during streaming to avoid fragmenting
+    // the decoder state. Final decoding is handled by AsrStop calling
+    // finalize_result which does input_finished + repeated decode.
     if let Some(ref stream) = *asr_stream {
         audio_buffer.extend_from_slice(samples);
 
@@ -403,14 +404,13 @@ async fn process_audio_chunk(
         if *asr_fed_len < audio_buffer.len() {
             let new_samples = &audio_buffer[*asr_fed_len..];
             let engine = state.asr_engine.lock().await;
-            let result = engine.recognize(stream, new_samples);
+            // Feed without decoding — decode at finalize time only
+            engine.feed_audio(stream, new_samples);
             *asr_fed_len = audio_buffer.len();
 
-            if let Some(r) = result {
-                if !r.text.is_empty() {
-                    let _ = tx.send(ServerMessage::interim(&r.text));
-                }
-            }
+            // Do NOT call decode here. For streaming ASR, decoding on every
+            // chunk fragments the decoder hypothesis. Let finalize_result
+            // (called from AsrStop) handle all decoding at once.
         }
     }
 }
