@@ -47,6 +47,9 @@ pub struct TtsConfig {
     pub model_type: String,
     pub model: Option<PathBuf>,
     pub tokens: Option<PathBuf>,
+    /// Optional lexicon file (for VITS models that use phoneme-based synthesis).
+    /// The Melo TTS model (vits-melo-tts-zh_en) requires lexicon.txt.
+    pub lexicon: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
     pub voice: Option<String>,
     #[serde(default = "default_num_threads")]
@@ -139,6 +142,7 @@ impl Default for TtsConfig {
             model_type: default_tts_model_type(),
             model: None,
             tokens: None,
+            lexicon: None,
             data_dir: None,
             voice: None,
             num_threads: default_num_threads(),

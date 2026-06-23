@@ -17,9 +17,16 @@ num_threads = 2
 provider = "cpu"
 
 [tts]
+# Model type options:
+#   "vits"       — VITS-based models (Melo, LJSpeech, etc.)
+#   "matcha"     — Matcha-TTS
+#   "kokoro"     — Kokoro TTS
+#   "pocket"     — Pocket TTS (edge-tts compatible)
 model_type = "vits"
 model = "/opt/voice-server/models/tts/model.onnx"
 tokens = "/opt/voice-server/models/tts/tokens.txt"
+# Lexicon file (required for some VITS models like vits-melo-tts-zh_en)
+lexicon = "/opt/voice-server/models/tts/lexicon.txt"
 num_threads = 1
 provider = "cpu"
 

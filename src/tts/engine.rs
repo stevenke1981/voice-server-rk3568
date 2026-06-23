@@ -88,6 +88,10 @@ fn build_tts_config(config: &TtsConfig) -> OfflineTtsConfig {
                 tts_config.model.vits.tokens =
                     Some(tokens.to_string_lossy().to_string());
             }
+            if let Some(lexicon) = &config.lexicon {
+                tts_config.model.vits.lexicon =
+                    Some(lexicon.to_string_lossy().to_string());
+            }
         }
         "matcha" | "matcha-tts" => {
             if let Some(model) = &config.model {
