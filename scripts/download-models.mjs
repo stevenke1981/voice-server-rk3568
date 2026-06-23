@@ -103,6 +103,26 @@ const MODELS = {
       files: ['en_US-glados.onnx', 'tokens.txt', 'espeak-ng-data'],
       configType: 'vits',
     },
+    'zh-ll': {
+      description: 'VITS ZH-LL (Chinese, ~113MB, 5 speakers — sid 0~4)',
+      archive: `${TTS_BASE}/sherpa-onnx-vits-zh-ll.tar.bz2`,
+      extractDir: 'sherpa-onnx-vits-zh-ll',
+      files: [
+        'model.onnx', 'tokens.txt', 'lexicon.txt',
+        'dict/', 'new_heteronym.fst', 'date.fst', 'phone.fst', 'number.fst',
+      ],
+      configType: 'vits',
+    },
+    'aishell3': {
+      description: 'VITS AISHELL-3 (Chinese, ~30MB download + ~180MB extracted, 174 speakers)',
+      archive: `${TTS_BASE}/vits-icefall-zh-aishell3.tar.bz2`,
+      extractDir: 'vits-icefall-zh-aishell3',
+      files: [
+        'model.onnx', 'tokens.txt', 'lexicon.txt', 'speakers.txt',
+        'date.fst', 'new_heteronym.fst', 'phone.fst', 'number.fst', 'rule.far',
+      ],
+      configType: 'vits',
+    },
   },
   vad: {
     'silero-vad': {
@@ -199,6 +219,7 @@ async function main() {
   // ASR default: zipformer-zh-14m (Chinese, RK3568 optimized)
   // Use --asr-model <name> to override, e.g. --asr-model sense-voice-int8
   const ASR_DEFAULT = 'zipformer-zh-14m';
+  const TTS_DEFAULT = 'vits-melo-zh-en';
   const selected = {};
   if (selections.includes('asr')) {
     const modelArg = args.indexOf('--asr-model');
@@ -216,8 +237,19 @@ async function main() {
     }
   }
   if (selections.includes('tts')) {
-    const keys = Object.keys(MODELS.tts);
-    selected.tts = keys[0];
+    const ttsArg = args.indexOf('--tts-model');
+    if (ttsArg !== -1 && ttsArg + 1 < args.length) {
+      const requested = args[ttsArg + 1];
+      if (MODELS.tts[requested]) {
+        selected.tts = requested;
+        console.log(`  TTS model: ${requested} (requested via --tts-model)`);
+      } else {
+        console.log(`  ⚠ Unknown TTS model '${requested}', using default: ${TTS_DEFAULT}`);
+        selected.tts = TTS_DEFAULT;
+      }
+    } else {
+      selected.tts = TTS_DEFAULT;
+    }
   }
   if (selections.includes('vad')) {
     const keys = Object.keys(MODELS.vad);

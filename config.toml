@@ -18,20 +18,38 @@ provider = "cpu"
 
 [tts]
 # Model type options:
-#   "vits"       — VITS-based models (Melo, LJSpeech, etc.)
+#   "vits"       — VITS-based models (Melo, zh-ll, aishell3, etc.)
 #   "matcha"     — Matcha-TTS
 #   "kokoro"     — Kokoro TTS
 #   "pocket"     — Pocket TTS (edge-tts compatible)
 model_type = "vits"
 model = "/opt/voice-server/models/tts/model.onnx"
 tokens = "/opt/voice-server/models/tts/tokens.txt"
-# Lexicon file (required for some VITS models like vits-melo-tts-zh_en)
+# Lexicon file (required for VITS Chinese models)
 lexicon = "/opt/voice-server/models/tts/lexicon.txt"
-# Optional: set for espeak-ng/phoneme models (needs phontab/phonindex/phondata).
-# Melo TTS zh-en does NOT need this; dict/ subfolder is auto-detected.
-# data_dir = "/opt/voice-server/models/tts"
 num_threads = 1
 provider = "cpu"
+
+# ── TTS Model Profiles ────────────────────────────────────────
+# Uncomment the profile for the model you downloaded, then comment out the
+# default [tts] paths above, OR just run install.sh to auto-configure.
+#
+# vits-melo-zh-en (1 speaker, Chinese+English):
+#   model      = "/opt/voice-server/models/tts/model.onnx"
+#   tokens     = "/opt/voice-server/models/tts/tokens.txt"
+#   lexicon    = "/opt/voice-server/models/tts/lexicon.txt"
+#
+# zh-ll (5 speakers sid 0~4, Chinese only):
+#   model      = "/opt/voice-server/models/tts/model.onnx"
+#   tokens     = "/opt/voice-server/models/tts/tokens.txt"
+#   lexicon    = "/opt/voice-server/models/tts/lexicon.txt"
+#   # Use --voice <sid> with client to select speaker
+#
+# aishell3 (174 speakers sid 0~173, Chinese only):
+#   model      = "/opt/voice-server/models/tts/model.onnx"
+#   tokens     = "/opt/voice-server/models/tts/tokens.txt"
+#   lexicon    = "/opt/voice-server/models/tts/lexicon.txt"
+#   # Has speakers.txt in tts/ directory with speaker names
 
 [vad]
 model = "/opt/voice-server/models/vad/silero_vad.onnx"

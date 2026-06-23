@@ -136,16 +136,19 @@ if [ "${FLAG_DOWNLOAD}" = true ]; then
         if [ -f "${MODEL_DIR}/tts/model.onnx" ]; then
             sed -i 's|model = ".*"|model = "/opt/voice-server/models/tts/model.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
             sed -i 's|tokens = ".*"|tokens = "/opt/voice-server/models/tts/tokens.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            if [ -f "${MODEL_DIR}/tts/lexicon.txt" ]; then
-                if ! grep -q '^lexicon = ' "${INSTALL_DIR}/${CONFIG_NAME}"; then
-                    sed -i '/^tokens = /a lexicon = "/opt/voice-server/models/tts/lexicon.txt"' "${INSTALL_DIR}/${CONFIG_NAME}"
-                else
-                    sed -i 's|lexicon = ".*"|lexicon = "/opt/voice-server/models/tts/lexicon.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-                fi
-            fi
             sed -i 's|model_type = ".*"|model_type = "vits"|' "${INSTALL_DIR}/${CONFIG_NAME}"
             sed -i 's|provider = ".*"|provider = "cpu"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            echo "✓ TTS config updated (model + tokens + lexicon)"
+            if [ -f "${MODEL_DIR}/tts/lexicon.txt" ]; then
+                sed -i 's|lexicon = ".*"|lexicon = "/opt/voice-server/models/tts/lexicon.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+            fi
+            # Detect TTS model type
+            if [ -f "${MODEL_DIR}/tts/rule.far" ]; then
+                echo "✓ TTS model: aishell3 (174 speakers, sid 0~173, see speakers.txt)"
+            elif [ -d "${MODEL_DIR}/tts/dict" ]; then
+                echo "✓ TTS model: zh-ll or melo (multi-speaker if zh-ll, sid 0~4)"
+            else
+                echo "✓ TTS model detected (VITS)"
+            fi
         fi
     else
         echo "⚠ Download script not found: ${DOWNLOAD_SCRIPT}"
