@@ -31,10 +31,10 @@ const TTS_BASE = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-mo
 
 const MODELS = {
   asr: {
-    'zipformer-en-20m': {
-      description: 'Zipformer EN streaming 20M (English, ~40MB extracted)',
-      archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2`,
-      extractDir: 'sherpa-onnx-streaming-zipformer-en-20M-2023-02-17',
+    'zipformer-zh-14m': {
+      description: 'Zipformer ZH streaming 14M (Chinese, ~25MB extracted, RK3568推荐)',
+      archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2`,
+      extractDir: 'sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23',
       files: ['encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.int8.onnx', 'joiner-epoch-99-avg-1.int8.onnx', 'tokens.txt'],
       configType: 'transducer',
       fileMap: {
@@ -43,10 +43,31 @@ const MODELS = {
         'joiner-epoch-99-avg-1.int8.onnx': 'joiner.onnx',
       },
     },
-    'zipformer-zh-14m': {
-      description: 'Zipformer ZH streaming 14M (Chinese, ~25MB extracted)',
-      archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2`,
-      extractDir: 'sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23',
+    'zipformer-zh-int8': {
+      description: 'Zipformer ZH int8 streaming (Chinese, newer model, ~40MB)',
+      archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2`,
+      extractDir: 'sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30',
+      files: ['encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.int8.onnx', 'joiner-epoch-99-avg-1.int8.onnx', 'tokens.txt'],
+      configType: 'transducer',
+      fileMap: {
+        'encoder-epoch-99-avg-1.int8.onnx': 'encoder.onnx',
+        'decoder-epoch-99-avg-1.int8.onnx': 'decoder.onnx',
+        'joiner-epoch-99-avg-1.int8.onnx': 'joiner.onnx',
+      },
+    },
+    'sense-voice-int8': {
+      description: 'SenseVoice int8 multilingual (中文/英/日/韩/粤, ~228MB, 高精度)',
+      archive: `${ASR_BASE}/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2`,
+      extractDir: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+      files: ['model.int8.onnx', 'tokens.txt'],
+      configType: 'sense_voice',
+      fileMap: {},
+      note: 'Use model_type = "sense_voice" and model = "/opt/voice-server/models/asr/model.int8.onnx" in config.toml',
+    },
+    'zipformer-en-20m': {
+      description: 'Zipformer EN streaming 20M (English, ~40MB extracted)',
+      archive: `${ASR_BASE}/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2`,
+      extractDir: 'sherpa-onnx-streaming-zipformer-en-20M-2023-02-17',
       files: ['encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.int8.onnx', 'joiner-epoch-99-avg-1.int8.onnx', 'tokens.txt'],
       configType: 'transducer',
       fileMap: {
@@ -170,11 +191,25 @@ async function main() {
     process.exit(1);
   }
 
-  // Pick first model from each selected category
+  // Pick default model from each selected category
+  // ASR default: zipformer-zh-14m (Chinese, RK3568 optimized)
+  // Use --asr-model <name> to override, e.g. --asr-model sense-voice-int8
+  const ASR_DEFAULT = 'zipformer-zh-14m';
   const selected = {};
   if (selections.includes('asr')) {
-    const keys = Object.keys(MODELS.asr);
-    selected.asr = keys[0];
+    const modelArg = args.indexOf('--asr-model');
+    if (modelArg !== -1 && modelArg + 1 < args.length) {
+      const requested = args[modelArg + 1];
+      if (MODELS.asr[requested]) {
+        selected.asr = requested;
+        console.log(`  ASR model: ${requested} (requested via --asr-model)`);
+      } else {
+        console.log(`  ⚠ Unknown ASR model '${requested}', using default: ${ASR_DEFAULT}`);
+        selected.asr = ASR_DEFAULT;
+      }
+    } else {
+      selected.asr = ASR_DEFAULT;
+    }
   }
   if (selections.includes('tts')) {
     const keys = Object.keys(MODELS.tts);

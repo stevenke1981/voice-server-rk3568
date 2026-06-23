@@ -106,12 +106,28 @@ if [ "${FLAG_DOWNLOAD}" = true ]; then
 
         # Update config.toml paths to match downloaded models
         echo "=== Updating config paths ==="
-        if grep -q 'zipformer-en' <(ls "${MODEL_DIR}/asr/" 2>/dev/null); then
-            sed -i 's|encoder = ".*"|encoder = "/opt/voice-server/models/asr/encoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            sed -i 's|decoder = ".*"|decoder = "/opt/voice-server/models/asr/decoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            sed -i 's|joiner = ".*"|joiner = "/opt/voice-server/models/asr/joiner.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            sed -i 's|tokens = ".*"|tokens = "/opt/voice-server/models/asr/tokens.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
-            echo "✓ ASR config paths updated"
+        if ls "${MODEL_DIR}/asr/" 2>/dev/null | grep -qE 'encoder\.onnx|model\.int8\.onnx'; then
+            # Zipformer transducer model (encoder/decoder/joiner)
+            if [ -f "${MODEL_DIR}/asr/encoder.onnx" ]; then
+                sed -i 's|encoder = ".*"|encoder = "/opt/voice-server/models/asr/encoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|decoder = ".*"|decoder = "/opt/voice-server/models/asr/decoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|joiner = ".*"|joiner = "/opt/voice-server/models/asr/joiner.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|tokens = ".*"|tokens = "/opt/voice-server/models/asr/tokens.txt"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|model_type = ".*"|model_type = "zipformer"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                echo "✓ ASR config updated for zipformer transducer model"
+            # SenseVoice model (single model file)
+            elif [ -f "${MODEL_DIR}/asr/model.int8.onnx" ]; then
+                sed -i 's|encoder = ".*"|#encoder = "/opt/voice-server/models/asr/encoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|decoder = ".*"|#decoder = "/opt/voice-server/models/asr/decoder.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|joiner = ".*"|#joiner = "/opt/voice-server/models/asr/joiner.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                sed -i 's|model_type = ".*"|model_type = "sense_voice"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                if ! grep -q '^model = ' "${INSTALL_DIR}/${CONFIG_NAME}"; then
+                    sed -i '/^\[asr\]/a model = "/opt/voice-server/models/asr/model.int8.onnx"' "${INSTALL_DIR}/${CONFIG_NAME}"
+                else
+                    sed -i 's|model = ".*"|model = "/opt/voice-server/models/asr/model.int8.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"
+                fi
+                echo "✓ ASR config updated for SenseVoice model"
+            fi
         fi
         if [ -f "${MODEL_DIR}/vad/silero_vad.onnx" ]; then
             sed -i 's|model = ".*"|model = "/opt/voice-server/models/vad/silero_vad.onnx"|' "${INSTALL_DIR}/${CONFIG_NAME}"

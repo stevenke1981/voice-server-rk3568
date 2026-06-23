@@ -5,6 +5,9 @@ max_connections = 8
 idle_timeout_secs = 300
 
 [asr]
+# Model type options:
+#   "zipformer"   — encoder+decoder+joiner transducer model (e.g., zipformer-zh-14m)
+#   "sense_voice" — single model file, multilingual (中文/英/日/韩/粤)
 model_type = "zipformer"
 encoder = "/opt/voice-server/models/asr/encoder.onnx"
 decoder = "/opt/voice-server/models/asr/decoder.onnx"
