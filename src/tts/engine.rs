@@ -92,17 +92,16 @@ fn build_tts_config(config: &TtsConfig) -> OfflineTtsConfig {
                 tts_config.model.vits.lexicon =
                     Some(lexicon.to_string_lossy().to_string());
             }
-            // dict_dir: directory containing dict/ subfolder with Jieba data.
-            // Required for Melo TTS zh-en (Jieba word segmentation + FST text normalization).
-            // Default: use the parent directory of model.onnx
-            // Note: vits.data_dir is NOT set here — it is only for espeak-ng-based
-            // piper models and would require phontab/phonindex/phondata files.
+            // dict_dir: points to dict/ subfolder for Jieba word segmentation.
+            // Required for Melo TTS zh-en model. Default: {model_parent}/dict.
+            // NOTE: vits.data_dir is NOT set here — it is for espeak-ng/phoneme
+            // models (expects phontab/phonindex/phondata) and would cause
+            // missing-file errors for Melo TTS.
             let data_dir = config.data_dir.as_deref().or_else(|| {
                 config.model.as_ref().and_then(|m| m.parent())
             });
             if let Some(d) = data_dir {
-                let d_str = d.to_string_lossy().to_string();
-                let dict_dir = format!("{}/dict", d_str.trim_end_matches(|c| c == '/' || c == '\\'));
+                let dict_dir = format!("{}/dict", d.to_string_lossy().trim_end_matches(|c| c == '/' || c == '\\'));
                 tts_config.model.vits.dict_dir = Some(dict_dir);
             }
         }
