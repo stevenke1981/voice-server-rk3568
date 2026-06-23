@@ -175,6 +175,10 @@ struct Args {
     /// If omitted, auto-generates: tts_<timestamp>.wav / asr_<timestamp>.txt
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    /// Speaker/voice ID for TTS (sid, e.g. 0~4 for zh-ll)
+    #[arg(long)]
+    voice: Option<String>,
 }
 
 // ── Main ───────────────────────────────────────────────────
@@ -209,7 +213,7 @@ async fn main() {
     }
 
     if let Some(tts_text) = args.tts {
-        run_tts_mode(tts_text, args.output, &mut write, &mut read).await;
+        run_tts_mode(tts_text, args.voice, args.output, &mut write, &mut read).await;
         return;
     }
 
@@ -515,16 +519,18 @@ async fn run_asr_file_mode(
 
 async fn run_tts_mode(
     text: String,
+    voice: Option<String>,
     output: Option<PathBuf>,
     write: &mut (impl SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin),
     read: &mut (impl StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin),
 ) {
-    println!("📝 Sending TTS request: \"{text}\"");
+    let voice_display = voice.as_deref().unwrap_or("default");
+    println!("📝 Sending TTS request: \"{text}\" (voice={voice_display})");
 
     let tts_text = text.clone();
     let tts_req = ClientMessage::TtsRequest {
         text,
-        voice: None,
+        voice,
     };
     send_json(write, &tts_req).await;
 
